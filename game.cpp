@@ -72,6 +72,23 @@ string getColor(string text="default") {
     return "";
 }
 
+int getPlainTextLength(const std::string& text) {
+    int length = 0;
+    bool in_skip = false;
+
+    for (int i = 0; i < text.size(); i++) {
+        if (text[i] == '\033') { // Start of color sequence
+            in_skip = true;
+        } else if (in_skip && text[i] == 'm') { // End of color sequence
+            in_skip = false;
+        } else if (!in_skip) { // Count regular characters other than the color seq
+            length++;
+        }
+    }
+    return length;
+}
+
+
 // classes
 class Monster {
     // parent class that contains most specs for each monster
@@ -152,9 +169,9 @@ class Goblin: public Monster {
 
         Goblin(string given_name): Monster(given_name) {
             type = goblin;
-            max_health = 30;
+            max_health = 50;
             health = max_health;
-            damage = 20;
+            damage = 30;
             speed = 50;
             // type specifics
             num_attack = 2;
@@ -181,9 +198,9 @@ class Troll: public Monster {
             max_health = 100;
             health = max_health;
             speed = 20;
-            damage = 20;
+            damage = 40;
             // type specifics
-            regen_amount = 10;
+            regen_amount = 20;
         };
 
         void on_end_turn(){
@@ -206,12 +223,12 @@ class Orc: public Monster {
 
         Orc(string given_name): Monster(given_name) {
             type = orc;
-            max_health = 100;
+            max_health = 70;
             health = max_health;
             speed = 20;
-            damage = 20;
-            block_amount = 20;
-            reflect_amount = block_amount/2;
+            damage = 30;
+            block_amount = 10;
+            reflect_amount = 10;
         };
 
         void on_enemy_attack(int amount, Monster& enemy) {
@@ -222,11 +239,11 @@ class Orc: public Monster {
                 damage_dealt = amount - block_amount;
             } else {damage_dealt = 0;}
 
-            if (amount < reflect_amount) {
-                damage_reflected = amount;
-            } else {damage_reflected = reflect_amount;}
+            // if (amount < reflect_amount) {
+            //     damage_reflected = amount;
+            // } else {damage_reflected = reflect_amount;}
 
-            enemy.reduce_health(damage_reflected);
+            enemy.reduce_health(reflect_amount);
         };
 };
 
@@ -236,6 +253,7 @@ class Team {
         Monster* active_monster;
         string name;
         bool is_defeated;
+        int n_monsters;
 
         Team (string team_name, vector<Monster*> monster_list) {
             monsters = monster_list;
@@ -245,12 +263,13 @@ class Team {
             for (const auto& mon : monsters) { // Iterates through all elements
                 // set the team variable of Monster to team name
                 mon->team = team_name;
-                lineup_text += monsterTypeToString(mon->type) + " " + mon->name + "; ";
+                // lineup_text += monsterTypeToString(mon->type) + " " + mon->name + "; ";
             }
 
             is_defeated = false;
-            // change color
-            cout << getColor(name) + lineup_text + getColor() << endl;
+            n_monsters = monsters.size();
+            // output line-up text
+            // cout << getColor(name) + lineup_text + getColor() << endl;
         };
 
         void update_team() {
@@ -315,26 +334,65 @@ void turn(Monster& mon1, Monster& mon2) {
     }
 };
 
-void vs_status_text(Monster& mon1, Monster& mon2){
-    cout << "\n" + getColor(mon1.team) + 
+string get_vs_status_text(Monster& mon1, Monster& mon2){
+    return  getColor(mon1.team) + 
             "[ " + mon1.team + " | " + mon1.disp(false, false) + 
             " (" + to_string(mon1.health) + 
             ") ] " + getColor() + "..." + getColor(mon2.team)+
             " [ " + mon2.disp(false, false) + " (" + to_string(mon2.health) + 
             ") | " + mon2.team + " ]" + getColor() + "\n";
+    
+};
+
+string get_vs_status_text(Monster& mon1){
+    return  getColor(mon1.team) + 
+            "[ " + mon1.team + " | " + mon1.disp(false, false) + 
+            " (" + to_string(mon1.health) + 
+            ") ]" + getColor();
 };
 
 void battle(Team& team1, Team& team2) {
     // takes two teams, end after monsters in one team are all dead
     int turn_idx = 1;
 
+    vector<string> team1_vs_texts;
+    vector<string> team2_vs_texts;
+    int max_team1_len = 0;
+    for (int i = 0; i < team1.n_monsters; i++) {
+        string text = get_vs_status_text(*(team1.monsters[i]));
+        int plain_length = getPlainTextLength(text);
+        team1_vs_texts.push_back(get_vs_status_text(*(team1.monsters[i])));
+        if (plain_length > max_team1_len) {
+            max_team1_len = plain_length;
+        }
+    }
+    for (int i = 0; i < team2.n_monsters; i++) {
+        team2_vs_texts.push_back(get_vs_status_text(*(team2.monsters[i])));
+    }
 
+    int n_less = min(team1_vs_texts.size(), team2_vs_texts.size());
+
+    for (int i = 0; i < n_less; i++) {
+        string text1 = get_vs_status_text(*(team1.monsters[i]));
+        cout << text1 + string(max_team1_len-getPlainTextLength(text1), ' ') + 
+            " ... " + get_vs_status_text(*(team2.monsters[i])) + "\n";
+    }
+    if (team1.n_monsters > n_less) {
+        for (int i = n_less; i < team1.n_monsters; i++) {
+            cout << get_vs_status_text(*(team1.monsters[i])) + "\n";
+        }
+    } else if (team2.n_monsters > n_less) {
+        for (int i = n_less; i < team2.n_monsters; i++) {
+            cout << string(max_team1_len+5, ' ') + 
+                get_vs_status_text(*(team2.monsters[i])) + "\n";
+        }
+    }
 
     
     while ((!team1.is_defeated) && (!team2.is_defeated)) {
         cout << "\nTurn " + to_string(turn_idx) + "\n";
 
-        vs_status_text(*(team1.active_monster), *(team2.active_monster));
+        cout << "\n" + get_vs_status_text(*(team1.active_monster), *(team2.active_monster));
         turn(*(team1.active_monster), *(team2.active_monster));
         team1.update_team();
         team2.update_team();
@@ -365,7 +423,7 @@ int main() {
     // turn(gob1, gob2);
 
     Team red_team("Red", {new Troll(popName(namepool))});
-    Team blue_team("Blue", {new Troll(popName(namepool))});
+    Team blue_team("Blue", {new Goblin(popName(namepool)), new Troll(popName(namepool))});
 
     battle(red_team, blue_team);
 
