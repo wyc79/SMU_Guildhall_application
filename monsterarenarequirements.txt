@@ -96,7 +96,7 @@ Turn ??
 Red Troll attacks Blue Orc for ? damage, dealing ? damage, and receiving ? reflected damage
 Blue Orc attacks Red Troll for ? damage
 Red Troll regenerates ? health
-Blue Orc has died
+Blue Orc has diedre
 
 Battle over. Red team wins!
 
