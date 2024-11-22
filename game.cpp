@@ -330,13 +330,10 @@ class Team {
             for (const auto& mon : monsters) { // Iterates through all elements
                 // set the team variable of Monster to team name
                 mon->team = team_name;
-                // lineup_text += monsterTypeToString(mon->type) + " " + mon->name + "; ";
             }
 
             is_defeated = false;
             n_monsters = monsters.size();
-            // output line-up text
-            // cout << getColor(name) + lineup_text + getColor() << endl;
         };
 
         void update_team() {
@@ -398,13 +395,11 @@ void turn(Monster& mon1, Monster& mon2) {
     // then slower monster's turn end effect activate
     ActionLog log;
     faster->attack(*slower);
-    // cout << log.getActionText() + "\n";
     faster->on_end_turn();
 
     if (slower->is_alive){
         ActionLog log;
         slower->attack(*faster);
-        // cout << log.getActionText() + "\n";
         slower->on_end_turn();
     }
 };
@@ -429,6 +424,7 @@ void battle(Team* team1, Team* team2) {
     // takes two teams, end after monsters in one team are all dead
     int turn_idx = 1;
 
+    // output line-up text: monsters facing each other in a single file
     vector<string> team1_vs_texts;
     vector<string> team2_vs_texts;
     int max_team1_len = 0;
@@ -443,7 +439,6 @@ void battle(Team* team1, Team* team2) {
     for (int i = 0; i < team2->n_monsters; i++) {
         team2_vs_texts.push_back(get_member_text(*(team2->monsters[i])));
     }
-
     int n_less = min(team1_vs_texts.size(), team2_vs_texts.size());
 
     for (int i = 0; i < n_less; i++) {
@@ -462,10 +457,9 @@ void battle(Team* team1, Team* team2) {
         }
     }
 
-    
+    // while both teams are still standing, combat
     while ((!team1->is_defeated) && (!team2->is_defeated)) {
         cout << "\nTurn " << turn_idx << "\n";
-
         cout << get_vs_status_text(*(team1->active_monster), *(team2->active_monster));
         turn(*(team1->active_monster), *(team2->active_monster));
         team1->update_team();
@@ -474,8 +468,8 @@ void battle(Team* team1, Team* team2) {
         if (turn_idx>100){break;}
     }
 
+    // battle ended; if both team are defeated, tie; if team1 is defeated, team2 wins, vice versa
     cout << "Battle Over! ";
-
     if (team1->is_defeated && team2->is_defeated) {
         cout << " Tied!";
     } else if (team1->is_defeated){
@@ -490,6 +484,7 @@ void battle(Team* team1, Team* team2) {
 
 };
 
+// pick n monsters randomly, and return the selected monsters
 vector<Monster*> monster_picker(vector<string>& namepool, int n) {
     vector<Monster*> selected;
     uniform_int_distribution<> dis(0, 2);
