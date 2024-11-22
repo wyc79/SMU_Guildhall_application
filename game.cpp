@@ -6,6 +6,7 @@
 #include <string>
 #include <random>
 #include <algorithm> 
+#include <memory>
 using namespace std;
 
 // set rng
@@ -42,7 +43,9 @@ vector<string> getNamePool() {
         "Exia", "Dynames", "Kyrios", "Virtue", "Strike", "Freedom", "Justice",
         "Providence", "Destiny", "Impulse", "Legend", "Quanta", "OO", "Turna",
         "Burning", "Shining", "Epyon", "Kshatriya", "Sinanju", "ZGMF", "Alex",
-        "Jesta", "Miu", "Jegan", "ReZEL", "ReGZ"};
+        "Jesta", "Nu", "Jegan", "ReZEL", "ReGZ", "Guntank", "Guncannon", 
+        "Zeta", "ZZ", "Xi", "Sazabi", "Sinanju", "Duel", "Buster", "Blitz", "Aegis",
+        "Astray", "Akatsuki"};
 }
 
 string popName(vector<string>& vec) {
@@ -102,6 +105,8 @@ class Monster {
         bool is_alive; // if the monster is currently alive (true/false)
         string team; // place holder for team name
 
+        Monster () {}; // placeholder constructor
+
         Monster (string given_name) {
             name = given_name;
             is_alive = true;
@@ -114,11 +119,12 @@ class Monster {
         // defines behavior of attacking, goblin will be different
         virtual void attack(Monster& enemy){
             attack_text(enemy);
-            enemy.on_enemy_attack(damage);
+            enemy.on_enemy_attack(damage, this);
+            cout << endl;
         };
 
         // defines behavior on being attacked, orc will be different
-        virtual void on_enemy_attack(int amount){
+        virtual void on_enemy_attack(int amount, Monster* enemy = nullptr){
             reduce_health(amount);
             // if (is_alive) {
             //     cout << name + " remain health: " + to_string(health) + "\n";
@@ -142,22 +148,26 @@ class Monster {
 
         void attack_text(Monster& enemy){
             cout << disp(true, true) + " attacks " + enemy.disp(true, true) +
-                " for " + to_string(damage) + " damage" + "\n";
+                " for " + to_string(damage) + " damage; ";
         };
 
         // when the monster's health gets reduced
         void reduce_health(int amount) {
-            health -= amount;
-            if (health <= 0) {
-                health = 0;
-                die();
+            int reduce_amount;
+            if (amount >= health) {
+                reduce_amount = health;
+            } else {
+                reduce_amount = amount;
             }
+            health -= reduce_amount;
+            cout << "dealing " + to_string(reduce_amount) + "damage; ";
+            if (health <= 0) {die();}
         };
 
         // when monster dies
         void die() {
             is_alive = false;
-            cout << name + " has died!\n";
+            cout << disp(true, true) + " has died!\n";
         };
 
 };
@@ -181,7 +191,8 @@ class Goblin: public Monster {
             for (int i = 0; i < num_attack; i++) {
                 if (enemy.is_alive) {
                     attack_text(enemy);
-                    enemy.on_enemy_attack(damage);
+                    enemy.on_enemy_attack(damage, this);
+                    cout << endl;
                     }
                 else {break;}
             }
@@ -206,11 +217,14 @@ class Troll: public Monster {
         void on_end_turn(){
             health += regen_amount;
             if (health > max_health) {
+                int regenerated = max_health - health;
                 health = max_health;
-                cout << name + " regenerated to max health" + '\n';
+                cout << disp(true, true) + " regenerates " + to_string(regenerated) + 
+                    " health to " + to_string(health) + " (max)\n";
             }
             else {
-                cout << name + " regenerated to health " + to_string(health) + '\n';
+                cout << disp(true, true) + " regenerates " + to_string(regen_amount) + 
+                    " health to " + to_string(health) + '\n';
             }
         };
 };
@@ -225,25 +239,30 @@ class Orc: public Monster {
             type = orc;
             max_health = 70;
             health = max_health;
-            speed = 20;
+            speed = 30;
             damage = 30;
             block_amount = 10;
             reflect_amount = 10;
         };
 
-        void on_enemy_attack(int amount, Monster& enemy) {
+        void on_enemy_attack(int amount, Monster* enemy) override {
             int damage_dealt;
             int damage_reflected;
             
             if (amount > block_amount) {
                 damage_dealt = amount - block_amount;
+
             } else {damage_dealt = 0;}
 
             // if (amount < reflect_amount) {
             //     damage_reflected = amount;
             // } else {damage_reflected = reflect_amount;}
+            reduce_health(damage_dealt);
+            cout << to_string(damage_dealt) + " dealt; remain: " + to_string(health) + "; " + 
+                to_string(reflect_amount) + " reflected;\n";
 
-            enemy.reduce_health(reflect_amount);
+
+            enemy->reduce_health(reflect_amount);
         };
 };
 
@@ -308,11 +327,12 @@ void turn(Monster& mon1, Monster& mon2) {
     if (mon1.speed > mon2.speed) {
         faster = &mon1;
         slower = &mon2;
-    } else if (mon1.speed > mon2.speed) {
+    } else if (mon2.speed > mon1.speed) {
         faster = &mon2;
         slower = &mon1;
     } else {
         // randomly decides who goes first
+        cout << "Randomly deciding order\n";
         uniform_int_distribution<int> dist(0, 1);
         if (dist(gen) == 0) {
             faster = &mon1;
@@ -334,73 +354,97 @@ void turn(Monster& mon1, Monster& mon2) {
     }
 };
 
-string get_vs_status_text(Monster& mon1, Monster& mon2){
-    return  getColor(mon1.team) + 
-            "[ " + mon1.team + " | " + mon1.disp(false, false) + 
-            " (" + to_string(mon1.health) + 
-            ") ] " + getColor() + "..." + getColor(mon2.team)+
-            " [ " + mon2.disp(false, false) + " (" + to_string(mon2.health) + 
-            ") | " + mon2.team + " ]" + getColor() + "\n";
-    
-};
-
-string get_vs_status_text(Monster& mon1){
+string get_member_text(Monster& mon1, bool opposite=false){
+    if (opposite) {
+        return getColor(mon1.team)+
+            "[ " + mon1.disp(false, false) + " (" + to_string(mon1.health) + 
+            ") | " + mon1.team + " ]" + getColor();
+    }
     return  getColor(mon1.team) + 
             "[ " + mon1.team + " | " + mon1.disp(false, false) + 
             " (" + to_string(mon1.health) + 
             ") ]" + getColor();
 };
 
-void battle(Team& team1, Team& team2) {
+string get_vs_status_text(Monster& mon1, Monster& mon2, string vs_text=" ... "){
+    return  get_member_text(mon1, false) + vs_text + get_member_text(mon2, true) + "\n";
+};
+
+void battle(Team* team1, Team* team2) {
     // takes two teams, end after monsters in one team are all dead
     int turn_idx = 1;
 
     vector<string> team1_vs_texts;
     vector<string> team2_vs_texts;
     int max_team1_len = 0;
-    for (int i = 0; i < team1.n_monsters; i++) {
-        string text = get_vs_status_text(*(team1.monsters[i]));
+    for (int i = 0; i < team1->n_monsters; i++) {
+        string text = get_member_text(*(team1->monsters[i]));
         int plain_length = getPlainTextLength(text);
-        team1_vs_texts.push_back(get_vs_status_text(*(team1.monsters[i])));
+        team1_vs_texts.push_back(get_member_text(*(team1->monsters[i])));
         if (plain_length > max_team1_len) {
             max_team1_len = plain_length;
         }
     }
-    for (int i = 0; i < team2.n_monsters; i++) {
-        team2_vs_texts.push_back(get_vs_status_text(*(team2.monsters[i])));
+    for (int i = 0; i < team2->n_monsters; i++) {
+        team2_vs_texts.push_back(get_member_text(*(team2->monsters[i])));
     }
 
     int n_less = min(team1_vs_texts.size(), team2_vs_texts.size());
 
     for (int i = 0; i < n_less; i++) {
-        string text1 = get_vs_status_text(*(team1.monsters[i]));
+        string text1 = get_member_text(*(team1->monsters[i]));
         cout << text1 + string(max_team1_len-getPlainTextLength(text1), ' ') + 
-            " ... " + get_vs_status_text(*(team2.monsters[i])) + "\n";
+            "   " + get_member_text(*(team2->monsters[i]), true) + "\n";
     }
-    if (team1.n_monsters > n_less) {
-        for (int i = n_less; i < team1.n_monsters; i++) {
-            cout << get_vs_status_text(*(team1.monsters[i])) + "\n";
+    if (team1->n_monsters > n_less) {
+        for (int i = n_less; i < team1->n_monsters; i++) {
+            cout << get_member_text(*(team1->monsters[i])) + "\n";
         }
-    } else if (team2.n_monsters > n_less) {
-        for (int i = n_less; i < team2.n_monsters; i++) {
-            cout << string(max_team1_len+5, ' ') + 
-                get_vs_status_text(*(team2.monsters[i])) + "\n";
+    } else if (team2->n_monsters > n_less) {
+        for (int i = n_less; i < team2->n_monsters; i++) {
+            cout << string(max_team1_len+3, ' ') + // +3: corresponding to the length of text in the middle
+                get_member_text(*(team2->monsters[i]), true) + "\n";
         }
     }
 
     
-    while ((!team1.is_defeated) && (!team2.is_defeated)) {
+    while ((!team1->is_defeated) && (!team2->is_defeated)) {
         cout << "\nTurn " + to_string(turn_idx) + "\n";
 
-        cout << "\n" + get_vs_status_text(*(team1.active_monster), *(team2.active_monster));
-        turn(*(team1.active_monster), *(team2.active_monster));
-        team1.update_team();
-        team2.update_team();
+        cout << get_vs_status_text(*(team1->active_monster), *(team2->active_monster));
+        turn(*(team1->active_monster), *(team2->active_monster));
+        team1->update_team();
+        team2->update_team();
         turn_idx++;
         if (turn_idx>100){break;}
     }
     cout << "Battle Over!\n";
 
+    cout << "\n-----------------------------------------------------------------------------------------------------------------------\n";
+
+};
+
+vector<Monster*> monster_picker(vector<string>& namepool, int n) {
+    vector<Monster*> selected;
+    uniform_int_distribution<> dis(0, 2);
+    for (int i = 0; i < n; i++) {
+        MonsterType type = static_cast<MonsterType>(dis(gen));
+        switch (type) {
+            case goblin: 
+                selected.emplace_back(new Goblin(popName(namepool)));
+                break;
+            case troll: 
+                selected.emplace_back(new Troll(popName(namepool)));
+                break;
+            case orc: 
+                selected.emplace_back(new Orc(popName(namepool)));
+                break;
+            default: 
+                selected.emplace_back(new Monster(popName(namepool))); // this should not happen (ideally)
+                break;
+        }
+    }
+    return selected;
 };
 
 
@@ -410,23 +454,51 @@ int main() {
     vector<string> namepool = getNamePool();
     shuffle(namepool.begin(), namepool.end(), gen);
 
-    // Goblin gob1("goblin1");
-    // Goblin gob2("goblin2");
-    // Troll tro1("troll1");
-    // cout << "Generated: " + gob1.name + "\n";
-    // cout << "Generated: " + gob2.name + "\n";
-    // cout << "Generated: " + tro1.name + "\n";
-    // // gob1.attack(gob2);
-    // // gob1.attack(tro1);
+    int battle_idx = 1;
 
-    // turn(gob1, tro1);
-    // turn(gob1, gob2);
+    cout << "\n=======================================================================================================================\n";
 
-    Team red_team("Red", {new Troll(popName(namepool))});
-    Team blue_team("Blue", {new Goblin(popName(namepool)), new Troll(popName(namepool))});
+    // battle 1
+    cout << "\nBattle #" + to_string(battle_idx) + "\n";
+    battle(new Team("Red", {new Goblin(popName(namepool))}), 
+        new Team("Blue", {new Troll(popName(namepool))}));
+    battle_idx++;
 
-    battle(red_team, blue_team);
+    // battle 2
+    cout << "\nBattle #" + to_string(battle_idx) + "\n";
+    battle(new Team("Red", {new Goblin(popName(namepool))}), 
+        new Team("Blue", {new Troll(popName(namepool)), new Troll(popName(namepool))}));
+    battle_idx++;
+
+    // battle 3
+    cout << "\nBattle #" + to_string(battle_idx) + "\n";
+    battle(new Team("Red", {new Troll(popName(namepool))}), 
+        new Team("Blue", {new Orc(popName(namepool))}));
+    battle_idx++;
+
+    // battle 4
+    cout << "\nBattle #" + to_string(battle_idx) + "\n";
+    battle(new Team("Red", {new Troll(popName(namepool))}), 
+        new Team("Blue", {new Orc(popName(namepool)), new Orc(popName(namepool))}));
+    battle_idx++;
+
+    // battle 5
+    cout << "\nBattle #" + to_string(battle_idx) + "\n";
+    battle(new Team("Red", {new Orc(popName(namepool))}), 
+        new Team("Blue", {new Goblin(popName(namepool))}));
+    battle_idx++;
+
+    // battle 6
+    cout << "\nBattle #" + to_string(battle_idx) + "\n";
+    battle(new Team("Red", {new Orc(popName(namepool))}), 
+        new Team("Blue", {new Goblin(popName(namepool)), new Goblin(popName(namepool))}));
+    battle_idx++;
+
+    // battle 7
+    cout << "\nBattle #" + to_string(battle_idx) + "\n";
+    battle(new Team("Red", monster_picker(namepool, 4)), 
+        new Team("Blue", monster_picker(namepool, 4)));
+    battle_idx++;
 
     return 0;
-
 }
