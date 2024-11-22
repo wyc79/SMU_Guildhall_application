@@ -104,11 +104,11 @@ class ActionLog {
             attempted_damage(-1), actual_damage(-1), reflected_damage(-1) {}
 
         // Setters
-        void setAttemptedDamage(int value) {attempted_damage = value;}
-        void setActualDamage(int value) {actual_damage = value;}
-        void setReflectedDamage(int value) {reflected_damage = value;}
+        void set_attempted_damage(int value) {attempted_damage = value;}
+        void set_actual_damage(int value) {actual_damage = value;}
+        void set_reflected_damage(int value) {reflected_damage = value;}
 
-        string getActionText() {
+        string get_action_text() {
             string action_text = " for " + to_string(attempted_damage) + 
                 " damage; dealing " + to_string(actual_damage) + " damage; ";
             if (reflected_damage != -1) {
@@ -143,11 +143,11 @@ class Monster {
 
         // defines behavior of attacking, goblin will be different
         virtual void attack(Monster& enemy){
-            ActionLog log;
             if (enemy.is_alive){
-                log.setAttemptedDamage(damage);
+                ActionLog log;
+                log.set_attempted_damage(damage);
                 enemy.on_enemy_attack(damage, this, &log);
-                cout << attack_text(enemy) + log.getActionText() + "\n";
+                cout << attack_text(enemy) + log.get_action_text() + "\n";
             }
             
             enemy.check_death();
@@ -159,7 +159,7 @@ class Monster {
         // retruns actual damage amount & reflected amount
         virtual void on_enemy_attack(int amount, Monster* enemy = nullptr, ActionLog* log = nullptr){
             int reduce_amount = reduce_health(amount);
-            log->setActualDamage(reduce_amount);
+            log->set_actual_damage(reduce_amount);
         };
 
         // defines behavior on the end of each turn, troll will be different
@@ -196,12 +196,6 @@ class Monster {
             return reduce_amount;
         };
 
-        // // when monster dies
-        // void die() {
-        //     is_alive = false;
-        //     cout << disp(true, true) + " has died!\n";
-        // };
-
         bool check_death() {
             if (is_alive && health<=0) {
                 is_alive = false;
@@ -234,10 +228,10 @@ class Goblin: public Monster {
                 if (enemy.is_alive && is_alive) {
                     // attack_text(enemy);
                     ActionLog log;
-                    log.setAttemptedDamage(damage);
+                    log.set_attempted_damage(damage);
                     enemy.on_enemy_attack(damage, this, &log);
 
-                    cout << attack_text(enemy) + log.getActionText() + "\n";
+                    cout << attack_text(enemy) + log.get_action_text() + "\n";
                     check_death();
                     enemy.check_death();
                     }
@@ -308,8 +302,8 @@ class Orc: public Monster {
             //     damage_reflected = amount;
             // } else {damage_reflected = reflect_amount;}
             reduce_health(damage_dealt);
-            log->setActualDamage(damage_dealt);
-            log->setReflectedDamage(reflect_amount);
+            log->set_actual_damage(damage_dealt);
+            log->set_reflected_damage(reflect_amount);
 
             enemy->reduce_health(reflect_amount);
         };
@@ -318,7 +312,6 @@ class Orc: public Monster {
 class Team {
     public:
         vector<unique_ptr<Monster>> monsters; 
-        Monster* active_monster = nullptr; // points to the first alive monster
         string name;
         bool is_defeated;
         int n_monsters;
@@ -338,38 +331,43 @@ class Team {
                 throw runtime_error(
                     name + " Team has no monsters. Cannot set active_monster.");
             }
+            update_active_monster();
 
         }
 
         void update_team() {
-            if (!active_monster->is_alive) {
-                bool found_alive = false;
-                // iterate through all monsters to check if there is an alive one
-                // seems redudant but added just in case I might add a select function
-                // at some point
-                for (auto& mon : monsters) {
-                    if (mon->is_alive) { // Check if the monster is alive
-                        active_monster = mon.get(); // Set the alive monster as active
-                        found_alive = true;
-                        break; // Exit the loop once we find an alive monster
-                    }
-                }
-                if (!found_alive) {
-                    // If no alive monster is found, the team is defeated
-                    is_defeated = true;
-                    cout << getTeamName(true) + " is defeated!\n";
-                }
-            };
+            update_active_monster();
+            if (is_defeated) {
+                cout << get_team_name(true) + " is defeated!\n";
+            }
         };
         
         // get the team's name, optionally with color
-        string getTeamName(bool color = true) {
+        string get_team_name(bool color = true) {
             string text = name + " Team";
             if (color) {
                 text = getColor(name) + text + getColor();
             }
             return text;
         }
+
+        Monster& get_active_monster() const {
+            if (!active_monster) throw runtime_error("No active monster available.");
+            return *active_monster;
+        }
+
+        void update_active_monster() {
+            for (auto& mon : monsters) {
+                if (mon->is_alive) {
+                    active_monster = mon.get();
+                    return;
+                }
+            }
+            is_defeated = true;
+            active_monster = nullptr;
+        }
+    private:
+        Monster* active_monster = nullptr; // points to the first alive monster
 };
 
 // battle specific functions
@@ -410,7 +408,7 @@ void turn(Monster& mon1, Monster& mon2) {
     }
 };
 
-string get_member_text(Monster& mon1, bool opposite=false){
+string getMemberText(Monster& mon1, bool opposite=false){
     if (opposite) {
         return getColor(mon1.team)+
             "[ " + mon1.disp(false, false) + " (" + to_string(mon1.health) + 
@@ -422,8 +420,8 @@ string get_member_text(Monster& mon1, bool opposite=false){
             ") ]" + getColor();
 };
 
-string get_vs_status_text(Monster& mon1, Monster& mon2, string vs_text=" ... "){
-    return  get_member_text(mon1, false) + vs_text + get_member_text(mon2, true) + "\n";
+string getVSstatusText(Monster& mon1, Monster& mon2, string vs_text=" ... "){
+    return  getMemberText(mon1, false) + vs_text + getMemberText(mon2, true) + "\n";
 };
 
 void battle(unique_ptr<Team> team1, unique_ptr<Team> team2) {
@@ -435,39 +433,39 @@ void battle(unique_ptr<Team> team1, unique_ptr<Team> team2) {
     vector<string> team2_vs_texts;
     int max_team1_len = 0;
     for (const auto& mon : team1->monsters) {
-        string text = get_member_text(*mon);
+        string text = getMemberText(*mon);
         int plain_length = getPlainTextLength(text);
-        team1_vs_texts.push_back(get_member_text(*mon));
+        team1_vs_texts.push_back(getMemberText(*mon));
         if (plain_length > max_team1_len) {
             max_team1_len = plain_length;
         }
     }
     for (const auto& mon : team2->monsters) {
-        team2_vs_texts.push_back(get_member_text(*mon));
+        team2_vs_texts.push_back(getMemberText(*mon));
     }
     int n_less = min(team1_vs_texts.size(), team2_vs_texts.size());
 
     for (int i = 0; i < n_less; i++) {
-        string text1 = get_member_text(*(team1->monsters[i]));
+        string text1 = getMemberText(*(team1->monsters[i]));
         cout << text1 + string(max_team1_len-getPlainTextLength(text1), ' ') + 
-            "   " + get_member_text(*(team2->monsters[i]), true) + "\n";
+            "   " + getMemberText(*(team2->monsters[i]), true) + "\n";
     }
     if (team1->n_monsters > n_less) {
         for (int i = n_less; i < team1->n_monsters; i++) {
-            cout << get_member_text(*(team1->monsters[i])) + "\n";
+            cout << getMemberText(*(team1->monsters[i])) + "\n";
         }
     } else if (team2->n_monsters > n_less) {
         for (int i = n_less; i < team2->n_monsters; i++) {
             cout << string(max_team1_len+3, ' ') + // +3: corresponding to the length of text in the middle
-                get_member_text(*(team2->monsters[i]), true) + "\n";
+                getMemberText(*(team2->monsters[i]), true) + "\n";
         }
     }
 
     // while both teams are still standing, combat
     while ((!team1->is_defeated) && (!team2->is_defeated)) {
         cout << "\nTurn " << turn_idx << "\n";
-        cout << get_vs_status_text(*(team1->active_monster), *(team2->active_monster));
-        turn(*(team1->active_monster), *(team2->active_monster));
+        cout << getVSstatusText(team1->get_active_monster(), team2->get_active_monster());
+        turn(team1->get_active_monster(), team2->get_active_monster());
         team1->update_team();
         team2->update_team();
         turn_idx++;
@@ -479,9 +477,9 @@ void battle(unique_ptr<Team> team1, unique_ptr<Team> team2) {
     if (team1->is_defeated && team2->is_defeated) {
         cout << "Tied!\n";
     } else if (team1->is_defeated){
-        cout << team2->getTeamName(true) << " wins!\n";
+        cout << team2->get_team_name(true) << " wins!\n";
     } else if (team2->is_defeated){
-        cout << team1->getTeamName(true) << " wins!\n";
+        cout << team1->get_team_name(true) << " wins!\n";
     }
 
     cout << "\n-----------------------------------------------------------------------------------------------------------------------\n";
