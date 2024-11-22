@@ -1,11 +1,11 @@
-// g++ -std=c++11 -o output game.cpp
+// g++ -std=c++14 -o output game.cpp
 // ./output
 
 #include <iostream>
 #include <vector>
 #include <string>
 #include <random>
-// #include <algorithm> 
+#include <map> 
 // #include <memory>
 using namespace std;
 
@@ -144,13 +144,14 @@ class Monster {
         // defines behavior of attacking, goblin will be different
         virtual void attack(Monster& enemy){
             ActionLog log;
-            log.setAttemptedDamage(damage);
-            enemy.on_enemy_attack(damage, this, &log);
-            // attempted_damage = damage;
-
-            cout << attack_text(enemy) + log.getActionText() + "\n";
-            check_death();
+            if (enemy.is_alive){
+                log.setAttemptedDamage(damage);
+                enemy.on_enemy_attack(damage, this, &log);
+                cout << attack_text(enemy) + log.getActionText() + "\n";
+            }
+            
             enemy.check_death();
+            check_death();
 
         };
 
@@ -261,7 +262,7 @@ class Troll: public Monster {
         };
 
         void on_end_turn(){
-            if (is_alive) {
+            if (is_alive && health<max_health) {
                 health += regen_amount;
                 if (health > max_health) {
                     int regenerated = max_health - health;
@@ -316,25 +317,29 @@ class Orc: public Monster {
 
 class Team {
     public:
-        vector<Monster*> monsters;
-        Monster* active_monster;
+        vector<unique_ptr<Monster>> monsters; 
+        Monster* active_monster = nullptr; // points to the first alive monster
         string name;
         bool is_defeated;
         int n_monsters;
 
-        Team (string team_name, vector<Monster*> monster_list) {
-            monsters = monster_list;
-            active_monster = monsters[0];
-            name = team_name;
-            string lineup_text = "Team " + name + " lineup: \n";
-            for (const auto& mon : monsters) { // Iterates through all elements
-                // set the team variable of Monster to team name
-                mon->team = team_name;
+        Team(const string team_name, vector<unique_ptr<Monster>> monster_list)
+            : name(team_name), is_defeated(false), n_monsters(monster_list.size()) {
+
+            for (auto& mon : monster_list) {
+                mon->team = team_name; // set team name for each monster    
+                monsters.push_back(std::move(mon)); // move monster into the team's vector
             }
 
-            is_defeated = false;
-            n_monsters = monsters.size();
-        };
+            // set the first monster as the active monster
+            if (!monsters.empty()) {
+                active_monster = monsters[0].get();
+            } else {
+                throw runtime_error(
+                    name + " Team has no monsters. Cannot set active_monster.");
+            }
+
+        }
 
         void update_team() {
             if (!active_monster->is_alive) {
@@ -344,7 +349,7 @@ class Team {
                 // at some point
                 for (auto& mon : monsters) {
                     if (mon->is_alive) { // Check if the monster is alive
-                        active_monster = mon; // Set the alive monster as active
+                        active_monster = mon.get(); // Set the alive monster as active
                         found_alive = true;
                         break; // Exit the loop once we find an alive monster
                     }
@@ -356,7 +361,8 @@ class Team {
                 }
             };
         };
-
+        
+        // get the team's name, optionally with color
         string getTeamName(bool color = true) {
             string text = name + " Team";
             if (color) {
@@ -420,7 +426,7 @@ string get_vs_status_text(Monster& mon1, Monster& mon2, string vs_text=" ... "){
     return  get_member_text(mon1, false) + vs_text + get_member_text(mon2, true) + "\n";
 };
 
-void battle(Team* team1, Team* team2) {
+void battle(unique_ptr<Team> team1, unique_ptr<Team> team2) {
     // takes two teams, end after monsters in one team are all dead
     int turn_idx = 1;
 
@@ -428,16 +434,16 @@ void battle(Team* team1, Team* team2) {
     vector<string> team1_vs_texts;
     vector<string> team2_vs_texts;
     int max_team1_len = 0;
-    for (int i = 0; i < team1->n_monsters; i++) {
-        string text = get_member_text(*(team1->monsters[i]));
+    for (const auto& mon : team1->monsters) {
+        string text = get_member_text(*mon);
         int plain_length = getPlainTextLength(text);
-        team1_vs_texts.push_back(get_member_text(*(team1->monsters[i])));
+        team1_vs_texts.push_back(get_member_text(*mon));
         if (plain_length > max_team1_len) {
             max_team1_len = plain_length;
         }
     }
-    for (int i = 0; i < team2->n_monsters; i++) {
-        team2_vs_texts.push_back(get_member_text(*(team2->monsters[i])));
+    for (const auto& mon : team2->monsters) {
+        team2_vs_texts.push_back(get_member_text(*mon));
     }
     int n_less = min(team1_vs_texts.size(), team2_vs_texts.size());
 
@@ -469,43 +475,56 @@ void battle(Team* team1, Team* team2) {
     }
 
     // battle ended; if both team are defeated, tie; if team1 is defeated, team2 wins, vice versa
-    cout << "Battle Over! ";
+    cout << "\nBattle Over! ";
     if (team1->is_defeated && team2->is_defeated) {
-        cout << " Tied!";
+        cout << "Tied!\n";
     } else if (team1->is_defeated){
-        cout << team2->getTeamName(true);
+        cout << team2->getTeamName(true) << " wins!\n";
     } else if (team2->is_defeated){
-        cout << team1->getTeamName(true);
+        cout << team1->getTeamName(true) << " wins!\n";
     }
-    cout << " wins!\n";
-    
 
     cout << "\n-----------------------------------------------------------------------------------------------------------------------\n";
 
 };
 
+// get a monster based on type
+unique_ptr<Monster> getMonster(MonsterType type, vector<string>& namepool) {
+    switch (type) {
+        case goblin: return make_unique<Goblin>(popName(namepool));
+        case troll: return make_unique<Troll>(popName(namepool));
+        case orc: return make_unique<Orc>(popName(namepool));
+        default: return make_unique<Monster>(popName(namepool)); // should not happen
+    }
+};
+
 // pick n monsters randomly, and return the selected monsters
-vector<Monster*> monster_picker(vector<string>& namepool, int n) {
-    vector<Monster*> selected;
+vector<MonsterType> monsterPicker(int n, vector<string>& namepool) {
+    vector<MonsterType> selected;
     uniform_int_distribution<> dis(0, 2);
     for (int i = 0; i < n; i++) {
         MonsterType type = static_cast<MonsterType>(dis(gen));
-        switch (type) {
-            case goblin: 
-                selected.emplace_back(new Goblin(popName(namepool)));
-                break;
-            case troll: 
-                selected.emplace_back(new Troll(popName(namepool)));
-                break;
-            case orc: 
-                selected.emplace_back(new Orc(popName(namepool)));
-                break;
-            default: 
-                selected.emplace_back(new Monster(popName(namepool))); // this should not happen (ideally)
-                break;
-        }
+        selected.emplace_back(type);
     }
     return selected;
+}
+
+void makeBattle(const pair<string, vector<MonsterType>>& lineup1, const pair<string, vector<MonsterType>>& lineup2, vector<string>& namepool) {
+
+    vector<unique_ptr<Monster>> team1_monsters;
+    for (auto& type : lineup1.second) {
+        team1_monsters.emplace_back(getMonster(type, namepool));
+    }
+
+    vector<unique_ptr<Monster>> team2_monsters;
+    for (auto& type : lineup2.second) {
+        team2_monsters.emplace_back(getMonster(type, namepool));
+    }
+
+    auto team1 = make_unique<Team>(lineup1.first, std::move(team1_monsters));
+    auto team2 = make_unique<Team>(lineup2.first, std::move(team2_monsters));
+    battle(std::move(team1), std::move(team2));
+
 };
 
 
@@ -519,46 +538,40 @@ int main() {
 
     cout << "\n=======================================================================================================================\n";
 
-    // battle 1
+
+    // battle 1: One goblin vs one troll.
     cout << "\nBattle #" << battle_idx << "\n";
-    battle(new Team("Red", {new Goblin(popName(namepool))}), 
-        new Team("Blue", {new Troll(popName(namepool))}));
+    makeBattle({"Red", {goblin}}, {"Blue", {troll}}, namepool);
     battle_idx++;
 
-    // battle 2
+    // battle 2: One goblin vs two trolls.
     cout << "\nBattle #" << battle_idx << "\n";
-    battle(new Team("Red", {new Goblin(popName(namepool))}), 
-        new Team("Blue", {new Troll(popName(namepool)), new Troll(popName(namepool))}));
+    makeBattle({"Red", {goblin}}, {"Blue", {troll, troll}}, namepool);
     battle_idx++;
 
-    // battle 3
+    // battle 3: One troll vs one orc.
     cout << "\nBattle #" << battle_idx << "\n";
-    battle(new Team("Red", {new Troll(popName(namepool))}), 
-        new Team("Blue", {new Orc(popName(namepool))}));
+    makeBattle({"Red", {troll}}, {"Blue", {orc}}, namepool);
     battle_idx++;
 
-    // battle 4
+    // battle 4: One troll vs two orc.
     cout << "\nBattle #" << battle_idx << "\n";
-    battle(new Team("Red", {new Troll(popName(namepool))}), 
-        new Team("Blue", {new Orc(popName(namepool)), new Orc(popName(namepool))}));
+    makeBattle({"Red", {troll}}, {"Blue", {orc, orc}}, namepool);
     battle_idx++;
 
-    // battle 5
+    // battle 5: One orc vs one goblin.
     cout << "\nBattle #" << battle_idx << "\n";
-    battle(new Team("Red", {new Orc(popName(namepool))}), 
-        new Team("Blue", {new Goblin(popName(namepool))}));
+    makeBattle({"Red", {orc}}, {"Blue", {goblin}}, namepool);
     battle_idx++;
 
-    // battle 6
+    // battle 6: One orc vs two goblin.
     cout << "\nBattle #" << battle_idx << "\n";
-    battle(new Team("Red", {new Orc(popName(namepool))}), 
-        new Team("Blue", {new Goblin(popName(namepool)), new Goblin(popName(namepool))}));
+    makeBattle({"Red", {orc}}, {"Blue", {goblin, goblin}}, namepool);
     battle_idx++;
 
-    // battle 7
+    // battle 7: 4 random monsters vs 4 random monsters.
     cout << "\nBattle #" << battle_idx << "\n";
-    battle(new Team("Red", monster_picker(namepool, 4)), 
-        new Team("Blue", monster_picker(namepool, 4)));
+    makeBattle({"Red", monsterPicker(4, namepool)}, {"Blue", monsterPicker(4, namepool)}, namepool);
     battle_idx++;
 
     return 0;
