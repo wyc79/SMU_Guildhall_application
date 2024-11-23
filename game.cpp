@@ -264,11 +264,11 @@ class Troll: public Monster {
                     int regenerated = max_health - health;
                     health = max_health;
                     cout << disp(true, true) << " regenerates " << regenerated <<
-                        " health to " << health << " (max)\n";
+                        " health to " << health << " (max);\n";
                 }
                 else {
                     cout << disp(true, true) << " regenerates " << regen_amount <<
-                        " health to " << health << "\n";
+                        " health to " << health << ";\n";
                 }
             }
             
@@ -300,8 +300,8 @@ class Orc: public Monster {
 
             } else {damage_dealt = 0;}
 
-            reduce_health(damage_dealt);
-            log->set_actual_damage(damage_dealt);
+            int reduce_amount = reduce_health(damage_dealt);
+            log->set_actual_damage(reduce_amount);
             log->set_reflected_damage(reflect_amount);
 
             enemy->reduce_health(reflect_amount);
