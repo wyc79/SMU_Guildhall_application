@@ -5,8 +5,6 @@
 #include <vector>
 #include <string>
 #include <random>
-#include <map> 
-// #include <memory>
 using namespace std;
 
 // set rng
@@ -24,7 +22,8 @@ constexpr OperatingSystem CURR_OS =
     linux;
 #endif
 
-// helper functions
+// helper functions (that does not require custom classes)
+
 string monsterTypeToString(MonsterType type) {
     // translate the monster type enumerator to string
     switch (type) {
@@ -48,6 +47,7 @@ vector<string> getNamePool() {
         "Astray", "Akatsuki"};
 }
 
+
 string popName(vector<string>& vec) {
     // function that mimics "pop" in other language
     // get the last element and delete it to avoid getting the same names in one run
@@ -60,6 +60,7 @@ string popName(vector<string>& vec) {
 }
 
 string getColor(string text="default") {
+    // string will be colored based on team name (currently only support red & blue)
     // return color only if operating system is not windows (i.e., is linux-based)
     if (CURR_OS == linux){
         if (text == "Red"){
@@ -75,31 +76,29 @@ string getColor(string text="default") {
     return "";
 }
 
+
 int getPlainTextLength(const string& text) {
+    // get the length of plain text without all the coloring escapes
     int length = 0;
     bool in_skip = false;
 
     for (int i = 0; i < text.size(); i++) {
-        if (text[i] == '\033') { // Start of color sequence
+        if (text[i] == '\033') { // start of color sequence
             in_skip = true;
-        } else if (in_skip && text[i] == 'm') { // End of color sequence
+        } else if (in_skip && text[i] == 'm') { // end of color sequence
             in_skip = false;
-        } else if (!in_skip) { // Count regular characters other than the color seq
+        } else if (!in_skip) { // count regular characters other than the color seq
             length++;
         }
     }
     return length;
 }
 
-
 // classes
 
 class ActionLog {
+    // records the output of each action in each turn
     public:
-        int attempted_damage; // attempted damage from attacker -> opponent
-        int actual_damage; // actual damage dealt from attacker -> opponent
-        int reflected_damage; // reflected damage from opponent -> attacker
-
         ActionLog () : 
             attempted_damage(-1), actual_damage(-1), reflected_damage(-1) {}
 
@@ -116,6 +115,12 @@ class ActionLog {
             } 
             return action_text;
         }
+    
+    private:
+        int attempted_damage; // attempted damage from attacker -> opponent
+        int actual_damage; // actual damage dealt from attacker -> opponent
+        int reflected_damage; // reflected damage from opponent -> attacker
+
 };
 
 class Monster {
@@ -130,13 +135,7 @@ class Monster {
         bool is_alive; // if the monster is currently alive (true/false)
         string team; // place holder for team name
 
-        Monster () {}; // placeholder constructor
-
-        Monster (string given_name) {
-            name = given_name;
-            is_alive = true;
-            team = "Unspecified";
-        };
+        Monster (string given_name): is_alive(true), name(given_name), team("Unspecified") {};
 
         // default virtual destructor
         virtual ~Monster() = default;
@@ -165,6 +164,10 @@ class Monster {
         // defines behavior on the end of each turn, troll will be different
         virtual void on_end_turn(){}; // nothing by default
 
+        // get the display name of the monster
+        // if with_team==true: <team> <monster type> <monster name>
+        // if with_color==true: name will be colored based on team name
+        // example: Blue Goblin Alex
         string disp(bool with_team, bool with_color){
             string disp_text = "";
             if (with_team){
@@ -178,8 +181,7 @@ class Monster {
         };
 
         string attack_text(Monster& enemy){
-            return disp(true, true) + " attacks " + enemy.disp(true, true);// +
-                // " for " + to_string(damage) + " damage; ";
+            return disp(true, true) + " attacks " + enemy.disp(true, true);
         };
 
         // when the monster's health gets reduced
@@ -213,16 +215,16 @@ class Goblin: public Monster {
     public:
         int num_attack; // number of attacks delt by goblin in each turn
 
-        Goblin(string given_name): Monster(given_name) {
+        Goblin(string given_name): 
+            Monster(given_name), num_attack(2) {
             type = goblin;
             max_health = 50;
             health = max_health;
             damage = 30;
             speed = 50;
-            // type specifics
-            num_attack = 2;
         };
 
+        // attack multiple times when attacking
         void attack(Monster& enemy) {
             for (int i = 0; i < num_attack; i++) {
                 if (enemy.is_alive && is_alive) {
@@ -245,16 +247,16 @@ class Troll: public Monster {
     public:
         int regen_amount; // amount of health regnerated at the end of (their own) turn
 
-        Troll(string given_name): Monster(given_name) {
+        Troll(string given_name): 
+            Monster(given_name), regen_amount(20) {
             type = troll;
             max_health = 100;
             health = max_health;
             speed = 20;
             damage = 40;
-            // type specifics
-            regen_amount = 20;
         };
 
+        // regeneration occurs at the end of their own turn
         void on_end_turn(){
             if (is_alive && health<max_health) {
                 health += regen_amount;
@@ -279,16 +281,16 @@ class Orc: public Monster {
         int block_amount;
         int reflect_amount;
 
-        Orc(string given_name): Monster(given_name) {
+        Orc(string given_name): 
+            Monster(given_name), block_amount(10), reflect_amount(10) {
             type = orc;
             max_health = 70;
             health = max_health;
             speed = 30;
             damage = 30;
-            block_amount = 10;
-            reflect_amount = 10;
         };
 
+        // blocking and reflecting occurs when enemy attacks
         void on_enemy_attack(int amount, Monster* enemy, ActionLog* log) override {
             int damage_dealt;
             int damage_reflected;
@@ -298,9 +300,6 @@ class Orc: public Monster {
 
             } else {damage_dealt = 0;}
 
-            // if (amount < reflect_amount) {
-            //     damage_reflected = amount;
-            // } else {damage_reflected = reflect_amount;}
             reduce_health(damage_dealt);
             log->set_actual_damage(damage_dealt);
             log->set_reflected_damage(reflect_amount);
@@ -310,6 +309,7 @@ class Orc: public Monster {
 };
 
 class Team {
+    // team class that can store a series (of pointers) of monsters, and if the team is defeated
     public:
         vector<unique_ptr<Monster>> monsters; 
         string name;
@@ -332,9 +332,9 @@ class Team {
                     name + " Team has no monsters. Cannot set active_monster.");
             }
             update_active_monster();
-
         }
-
+        
+        // update the team, check if the team is defeated
         void update_team() {
             update_active_monster();
             if (is_defeated) {
@@ -351,28 +351,37 @@ class Team {
             return text;
         }
 
+        // get the active monster since it's provate
         Monster& get_active_monster() const {
             if (!active_monster) throw runtime_error("No active monster available.");
             return *active_monster;
         }
 
+        // update the active monster
         void update_active_monster() {
+            // if the active monster is still alive, do nothing
+            if (active_monster->is_alive) {return;}
+            // else, iterate through the monster list and get the first alive monster
             for (auto& mon : monsters) {
                 if (mon->is_alive) {
                     active_monster = mon.get();
                     return;
                 }
             }
+            // else, if there is no alive monster in the team, the team is defeated 
+            // (and set active monster pointer to null)
             is_defeated = true;
             active_monster = nullptr;
         }
     private:
-        Monster* active_monster = nullptr; // points to the first alive monster
+        Monster* active_monster = nullptr; // points to the first alive monster; make it private so it can only be updated by its own class
 };
 
 // battle specific functions
+
 void turn(Monster& mon1, Monster& mon2) {
     // function for each turn, this will run continuously until battle ends
+    // for each turn, decide the faster and slower monster (based on speed)
     Monster* faster;
     Monster* slower;
     if (mon1.speed > mon2.speed) {
@@ -382,7 +391,7 @@ void turn(Monster& mon1, Monster& mon2) {
         faster = &mon2;
         slower = &mon1;
     } else {
-        // randomly decides who goes first
+        // randomly decides who goes first if both have the same speed
         // cout << "Randomly deciding order\n";
         uniform_int_distribution<int> dist(0, 1);
         if (dist(gen) == 0) {
@@ -397,18 +406,21 @@ void turn(Monster& mon1, Monster& mon2) {
     // then faster monster's turn end effect activate
     // if slower monster is still alive: slower monster attack
     // then slower monster's turn end effect activate
-    ActionLog log;
     faster->attack(*slower);
     faster->on_end_turn();
 
+    // the slower one attack if & only if it is still alive after the faster's attack
     if (slower->is_alive){
-        ActionLog log;
         slower->attack(*faster);
         slower->on_end_turn();
     }
 };
 
 string getMemberText(Monster& mon1, bool opposite=false){
+    // get the text to be outputted as a team member
+    // [ <team> | <monster type> <monster name> (remaining health) ]
+    // example: [ Red | Orc Kyrios (70) ] 
+    // if opposite=true: [ Goblin Alex (40) | Blue ]
     if (opposite) {
         return getColor(mon1.team)+
             "[ " + mon1.disp(false, false) + " (" + to_string(mon1.health) + 
@@ -421,14 +433,21 @@ string getMemberText(Monster& mon1, bool opposite=false){
 };
 
 string getVSstatusText(Monster& mon1, Monster& mon2, string vs_text=" ... "){
+    // get the line up text at the beginning of each turn and battle
+    // first and second monster have the opposite order to "face each other"
     return  getMemberText(mon1, false) + vs_text + getMemberText(mon2, true) + "\n";
 };
 
 void battle(unique_ptr<Team> team1, unique_ptr<Team> team2) {
+    // function that performs the battle
+
     // takes two teams, end after monsters in one team are all dead
     int turn_idx = 1;
 
     // output line-up text: monsters facing each other in a single file
+    // gets the member text from all the monsters first
+    // for team1 only, get the longest text, use it as reference for padding
+    // to ensure team2 can line up in a straight line
     vector<string> team1_vs_texts;
     vector<string> team2_vs_texts;
     int max_team1_len = 0;
@@ -443,13 +462,17 @@ void battle(unique_ptr<Team> team1, unique_ptr<Team> team2) {
     for (const auto& mon : team2->monsters) {
         team2_vs_texts.push_back(getMemberText(*mon));
     }
+    // get the lowest n_monsters (n_less)
+    // for the first n_less monsters on each team, have them face to face
+    // didn't use getVSstatusText because I want the second team to also line
+    // up in a straight line
     int n_less = min(team1_vs_texts.size(), team2_vs_texts.size());
-
     for (int i = 0; i < n_less; i++) {
         string text1 = getMemberText(*(team1->monsters[i]));
         cout << text1 + string(max_team1_len-getPlainTextLength(text1), ' ') + 
             "   " + getMemberText(*(team2->monsters[i]), true) + "\n";
     }
+    // for the rest of the monsters, output to corresponsing locations
     if (team1->n_monsters > n_less) {
         for (int i = n_less; i < team1->n_monsters; i++) {
             cout << getMemberText(*(team1->monsters[i])) + "\n";
@@ -460,7 +483,8 @@ void battle(unique_ptr<Team> team1, unique_ptr<Team> team2) {
                 getMemberText(*(team2->monsters[i]), true) + "\n";
         }
     }
-
+    
+    // actual combat
     // while both teams are still standing, combat
     while ((!team1->is_defeated) && (!team2->is_defeated)) {
         cout << "\nTurn " << turn_idx << "\n";
@@ -486,8 +510,8 @@ void battle(unique_ptr<Team> team1, unique_ptr<Team> team2) {
 
 };
 
-// get a monster based on type
 unique_ptr<Monster> getMonster(MonsterType type, vector<string>& namepool) {
+    // get a monster based on type
     switch (type) {
         case goblin: return make_unique<Goblin>(popName(namepool));
         case troll: return make_unique<Troll>(popName(namepool));
@@ -496,8 +520,8 @@ unique_ptr<Monster> getMonster(MonsterType type, vector<string>& namepool) {
     }
 };
 
-// pick n monsters randomly, and return the selected monsters
 vector<MonsterType> monsterPicker(int n, vector<string>& namepool) {
+    // pick n monsters randomly, and return the selected MonsterTypes 
     vector<MonsterType> selected;
     uniform_int_distribution<> dis(0, 2);
     for (int i = 0; i < n; i++) {
@@ -507,8 +531,13 @@ vector<MonsterType> monsterPicker(int n, vector<string>& namepool) {
     return selected;
 }
 
-void makeBattle(const pair<string, vector<MonsterType>>& lineup1, const pair<string, vector<MonsterType>>& lineup2, vector<string>& namepool) {
-
+void makeBattle(
+    // readable wrapper for combat, takes two "lineup" of monster,
+    // use it as instruction to build teams
+    // then send it to battle()
+    const pair<string, vector<MonsterType>>& lineup1, 
+    const pair<string, vector<MonsterType>>& lineup2, 
+    vector<string>& namepool) {
     vector<unique_ptr<Monster>> team1_monsters;
     for (auto& type : lineup1.second) {
         team1_monsters.emplace_back(getMonster(type, namepool));
@@ -526,7 +555,7 @@ void makeBattle(const pair<string, vector<MonsterType>>& lineup1, const pair<str
 };
 
 
-// main code
+// main code for running all the battles
 int main() {
 
     vector<string> namepool = getNamePool();
