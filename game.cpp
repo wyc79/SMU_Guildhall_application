@@ -378,7 +378,6 @@ class Team {
 };
 
 // battle specific functions
-
 void turn(Monster& mon1, Monster& mon2) {
     // function for each turn, this will run continuously until battle ends
     // for each turn, decide the faster and slower monster (based on speed)
