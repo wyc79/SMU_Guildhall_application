@@ -519,7 +519,7 @@ unique_ptr<Monster> getMonster(MonsterType type, vector<string>& namepool) {
     }
 };
 
-vector<MonsterType> monsterPicker(int n, vector<string>& namepool) {
+vector<MonsterType> monsterPicker(int n) {
     // pick n monsters randomly, and return the selected MonsterTypes 
     vector<MonsterType> selected;
     uniform_int_distribution<> dis(0, 2);
@@ -597,7 +597,7 @@ int main() {
 
     // battle 7: 4 random monsters vs 4 random monsters.
     cout << "\nBattle #" << battle_idx << "\n";
-    makeBattle({"Red", monsterPicker(4, namepool)}, {"Blue", monsterPicker(4, namepool)}, namepool);
+    makeBattle({"Red", monsterPicker(4)}, {"Blue", monsterPicker(4)}, namepool);
     battle_idx++;
 
     return 0;
